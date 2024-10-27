@@ -14,8 +14,14 @@ var (
 	grassSprite  rl.Texture2D
 	playerSprite rl.Texture2D
 
-	playerSrc  rl.Rectangle
-	playerDest rl.Rectangle
+	playerSrc                                     rl.Rectangle
+	playerDest                                    rl.Rectangle
+	playerMoving                                  bool
+	playerDir                                     int
+	playerUp, playerDown, playerRight, playerLeft bool
+	playerFrame                                   int
+
+	frameCount int
 
 	playerSpeed float32 = 3
 )
@@ -28,25 +34,69 @@ func drawScene() {
 func input() {
 	if rl.IsKeyDown(rl.KeyW) || rl.IsKeyDown(rl.KeyUp) {
 		playerDest.Y -= playerSpeed
+		playerMoving = true
+		playerDir = 1
+		playerUp = true
 	}
 	if rl.IsKeyDown(rl.KeyS) || rl.IsKeyDown(rl.KeyDown) {
+		playerMoving = true
 		playerDest.Y += playerSpeed
+		playerDir = 0
+		playerDown = true
 	}
 	if rl.IsKeyDown(rl.KeyA) || rl.IsKeyDown(rl.KeyLeft) {
+		playerMoving = true
 		playerDest.X -= playerSpeed
+		playerDir = 2
+		playerLeft = true
 	}
 	if rl.IsKeyDown(rl.KeyD) || rl.IsKeyDown(rl.KeyRight) {
+		playerMoving = true
 		playerDest.X += playerSpeed
+		playerDir = 3
+		playerRight = true
 	}
 }
 func update() {
 	running = !rl.WindowShouldClose()
+
+	if playerMoving {
+		if playerUp {
+			playerDest.Y -= playerSpeed
+		}
+		if playerDown {
+			playerDest.Y += playerSpeed
+		}
+		if playerRight {
+			playerDest.X += playerSpeed
+		}
+		if playerLeft {
+			playerDest.X -= playerSpeed
+		}
+
+		if frameCount%8 == 1 {
+			playerFrame++
+		}
+
+	}
+	frameCount++
+	if playerFrame > 3 {
+		playerFrame = 0
+	}
+
+	playerSrc.X = playerSrc.Width * float32(playerFrame)
+
+	playerSrc.Y = playerSrc.Height * float32(playerDir)
+
 }
 
 func render() {
 	rl.BeginDrawing()
 
 	rl.ClearBackground(bkgColor)
+
+	playerMoving = false
+	playerUp, playerDown, playerRight, playerLeft = false, false, false, false
 
 	drawScene()
 
