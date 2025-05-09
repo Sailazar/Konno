@@ -46,7 +46,27 @@ var (
 	treeAnimationSpeed int = 60 // Made even slower for more visible growth
 
 	camera rl.Camera2D // Add camera variable
+
+	pineConeCount int // Number of pine cones in inventory
+
+	bagBgSprite        rl.Texture2D
+	pineConeIconSprite rl.Texture2D
 )
+
+type ItemType int
+
+const (
+	ItemNone ItemType = iota
+	ItemPineCone
+	// Add more item types here as needed
+)
+
+type InventorySlot struct {
+	Item  ItemType
+	Count int
+}
+
+var inventory [4]InventorySlot
 
 func drawScene() {
 	// Calculate the visible area based on camera position
@@ -82,7 +102,8 @@ func drawScene() {
 	rl.DrawTexture(creatureSprite, int32(creatureX), int32(creatureY), rl.White)
 
 	for _, pos := range droppedPineCones {
-		rl.DrawTexture(pineConeSprite, int32(pos.X)-16, int32(pos.Y)-16, rl.White)
+		rl.DrawTexture(pineConeSprite, int32(pos.X)-pineConeSprite.Width/2, int32(pos.Y)-pineConeSprite.Height/2, rl.White)
+		rl.DrawCircle(int32(pos.X), int32(pos.Y), 5, rl.Blue) // Debug: cone center
 	}
 
 	// Draw all trees (growing and fully grown)
@@ -114,6 +135,7 @@ func drawScene() {
 	}
 
 	rl.DrawTexturePro(playerSprite, playerSrc, playerDest, rl.NewVector2(playerDest.Width, playerDest.Height), 0, rl.White)
+	rl.DrawCircle(int32(playerDest.X+playerDest.Width/2), int32(playerDest.Y+playerDest.Height/2), 5, rl.Red) // Debug: player center
 }
 
 func input() {
@@ -163,6 +185,11 @@ func input() {
 		} else {
 			fmt.Println("Not standing on any pine cone")
 		}
+	}
+
+	if rl.IsKeyPressed(rl.KeyV) {
+		fmt.Println("V key pressed!")
+		pickUpPineCone()
 	}
 }
 
@@ -224,6 +251,49 @@ func render() {
 
 	rl.EndMode2D() // End camera mode
 
+	// Draw the backpack background at the bottom center of the screen
+	bagX := 100                                                       // distance from the left side
+	bagY := float32(screenHeight) - float32(bagBgSprite.Height) - 420 // higher up
+
+	// Apply scaling factor to make the bag smaller (0.7 = 70% of original size)
+	scaleFactor := float32(0.7)
+	scaledBagWidth := float32(bagBgSprite.Width) * scaleFactor
+	scaledBagHeight := float32(bagBgSprite.Height) * scaleFactor
+
+	// Create source and destination rectangles for scaled drawing
+	bagSrc := rl.NewRectangle(0, 0, float32(bagBgSprite.Width), float32(bagBgSprite.Height))
+	bagDest := rl.NewRectangle(float32(bagX), float32(bagY), scaledBagWidth, scaledBagHeight)
+
+	// Draw the bag with scaling
+	rl.DrawTexturePro(bagBgSprite, bagSrc, bagDest, rl.Vector2{}, 0, rl.White)
+
+	// Draw the inventory slots and items - adjust for new scale
+	slotSize := scaledBagWidth / 4
+	for i, slot := range inventory {
+		// Adjust item positions according to the new scale
+		slotX := int32(bagX) + int32(float32(i)*slotSize) + int32(slotSize/3) - int32(float32(pineConeIconSprite.Width)*scaleFactor/3)
+		slotY := int32(bagY) + int32(scaledBagHeight/2) - int32(float32(pineConeIconSprite.Height)*scaleFactor/4)
+
+		if slot.Item == ItemPineCone && slot.Count > 0 {
+			// Draw the pinecone icon with the same scale factor
+			iconSrc := rl.NewRectangle(0, 0, float32(pineConeIconSprite.Width), float32(pineConeIconSprite.Height))
+			iconDest := rl.NewRectangle(float32(slotX), float32(slotY),
+				float32(pineConeIconSprite.Width)*scaleFactor,
+				float32(pineConeIconSprite.Height)*scaleFactor)
+
+			rl.DrawTexturePro(pineConeIconSprite, iconSrc, iconDest, rl.Vector2{}, 0, rl.White)
+
+			// Adjust text position and size
+			textSize := int32(20 * scaleFactor)
+			textX := slotX + int32(32*scaleFactor)
+			textY := slotY + int32(32*scaleFactor)
+			rl.DrawText(fmt.Sprintf("%d", slot.Count), textX, textY, textSize, rl.Black)
+		}
+		// Add more item types here as you add them
+	}
+
+	rl.DrawText(fmt.Sprintf("Pine Cones: %d", pineConeCount), 20, 20, 30, rl.Black)
+
 	rl.EndDrawing()
 }
 
@@ -243,6 +313,7 @@ func init() {
 	playerDest = rl.NewRectangle(200, 200, 100, 100)
 
 	droppedPineCones = make([]rl.Vector2, 0)
+	pineConeCount = 5 // Start with 5 pinecones in inventory
 
 	pineTreeSprite = rl.LoadTexture("res/Objects/pine_tree_growth.png") // Make sure to add this sprite
 	growingTrees = make([]struct {
@@ -258,6 +329,18 @@ func init() {
 		Rotation: 0,
 		Zoom:     1.0,
 	}
+
+	bagBgSprite = rl.LoadTexture("res/UI/bag_bg.png")
+	pineConeIconSprite = rl.LoadTexture("res/UI/pinecone_icon.png")
+
+	// Initialize inventory
+	for i := range inventory {
+		inventory[i].Item = ItemNone
+		inventory[i].Count = 0
+	}
+
+	// Set initial inventory
+	updateInventory()
 }
 
 func quit() {
@@ -269,33 +352,76 @@ func quit() {
 	rl.UnloadTexture(stoneTileSprite)
 	rl.UnloadTexture(pineConeSprite)
 	rl.UnloadTexture(pineTreeSprite)
+	rl.UnloadTexture(bagBgSprite)
+	rl.UnloadTexture(pineConeIconSprite)
+}
+
+func updateInventory() {
+	// Clear inventory first
+	for i := range inventory {
+		inventory[i].Item = ItemNone
+		inventory[i].Count = 0
+	}
+
+	// Add pine cones to first slot
+	if pineConeCount > 0 {
+		inventory[0].Item = ItemPineCone
+		inventory[0].Count = pineConeCount
+	}
+
+	// Add other items to other slots as needed
+	// For example:
+	// if waterCount > 0 {
+	//     inventory[1].Item = ItemWater
+	//     inventory[1].Count = waterCount
+	// }
 }
 
 func dropPineCone() {
+	// Only drop if we have pinecones in inventory
+	if pineConeCount <= 0 {
+		fmt.Println("No pine cones to drop!")
+		return
+	}
+
+	// Get player center
+	playerCenter := rl.Vector2{
+		X: playerDest.X + playerDest.Width/2,
+		Y: playerDest.Y + playerDest.Height/2,
+	}
+
+	// Drop offset based on the direction the player is facing
 	var offsetX, offsetY float32
 
+	// Use playerDir to determine drop position
 	switch playerDir {
 	case 0: // Down
 		offsetX = 0
-		offsetY = 20 // Reduced from 30 to 20 - closer to player
+		offsetY = playerDest.Height/2 + 30 // Drop in front of player
 	case 1: // Up
 		offsetX = 0
-		offsetY = -20
+		offsetY = -playerDest.Height/2 - 30 // Drop above player
 	case 2: // Left
-		offsetX = -20
+		offsetX = -playerDest.Width/2 - 30 // Drop to left of player
 		offsetY = 0
 	case 3: // Right
-		offsetX = 20
+		offsetX = playerDest.Width/2 + 30 // Drop to right of player
 		offsetY = 0
 	}
 
+	// Calculate the dropping position
 	pineConePos := rl.Vector2{
-		X: playerDest.X + playerDest.Width/2 + offsetX,
-		Y: playerDest.Y + playerDest.Height/2 + offsetY,
+		X: playerCenter.X + offsetX,
+		Y: playerCenter.Y + offsetY,
 	}
 
 	droppedPineCones = append(droppedPineCones, pineConePos)
-	fmt.Printf("Pine cone dropped at: %v\n", pineConePos)
+	pineConeCount-- // Decrease inventory count
+
+	// Update the inventory UI
+	updateInventory()
+
+	fmt.Printf("Dropped pine cone at: %v (facing direction: %d)\n", pineConePos, playerDir)
 }
 
 func isPlayerOnPineCone() (bool, rl.Vector2) {
@@ -357,8 +483,38 @@ func drawDebug() {
 	}
 }
 
-func main() {
+func pickUpPineCone() {
+	playerCenter := rl.Vector2{
+		X: playerDest.X + playerDest.Width/2,
+		Y: playerDest.Y + playerDest.Height/2,
+	}
 
+	// Log the player position for debugging
+	fmt.Printf("Player center position: %v\n", playerCenter)
+
+	for i, cone := range droppedPineCones {
+		// Log each cone position
+		fmt.Printf("Checking cone at position: %v\n", cone)
+
+		distance := float32(math.Hypot(float64(playerCenter.X-cone.X), float64(playerCenter.Y-cone.Y)))
+		fmt.Printf("Distance to cone: %f\n", distance)
+
+		// Increased pickup radius to match the interaction radius from isPlayerOnPineCone
+		if distance < 150 {
+			fmt.Println("Pine cone picked up!")
+			droppedPineCones = append(droppedPineCones[:i], droppedPineCones[i+1:]...)
+			pineConeCount++
+
+			// Update the inventory UI
+			updateInventory()
+
+			return // Added return to prevent checking other cones after picking one up
+		}
+	}
+	fmt.Println("No pine cone in range to pick up")
+}
+
+func main() {
 	for running {
 		input()
 		update()
