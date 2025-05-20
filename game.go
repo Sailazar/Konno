@@ -51,6 +51,10 @@ var (
 
 	bagBgSprite        rl.Texture2D
 	pineConeIconSprite rl.Texture2D
+
+	crystalStoneSprite   rl.Texture2D
+	crystalStoneCount    int
+	droppedCrystalStones []rl.Vector2
 )
 
 type ItemType int
@@ -58,7 +62,7 @@ type ItemType int
 const (
 	ItemNone ItemType = iota
 	ItemPineCone
-	// Add more item types here as needed
+	ItemCrystalStone // Add new item type
 )
 
 type InventorySlot struct {
@@ -136,6 +140,26 @@ func drawScene() {
 
 	rl.DrawTexturePro(playerSprite, playerSrc, playerDest, rl.NewVector2(playerDest.Width, playerDest.Height), 0, rl.White)
 	rl.DrawCircle(int32(playerDest.X+playerDest.Width/2), int32(playerDest.Y+playerDest.Height/2), 5, rl.Red) // Debug: player center
+
+	// Draw dropped crystal stones with scaling
+	for _, pos := range droppedCrystalStones {
+		// Calculate scaled dimensions (50% of original size)
+		scaleFactor := float32(0.075)
+		scaledWidth := float32(crystalStoneSprite.Width) * scaleFactor
+		scaledHeight := float32(crystalStoneSprite.Height) * scaleFactor
+
+		// Create source and destination rectangles for scaled drawing
+		src := rl.NewRectangle(0, 0, float32(crystalStoneSprite.Width), float32(crystalStoneSprite.Height))
+		dest := rl.NewRectangle(
+			pos.X-scaledWidth/2,  // Center horizontally
+			pos.Y-scaledHeight/2, // Center vertically
+			scaledWidth,
+			scaledHeight,
+		)
+
+		// Draw the crystal stone with scaling
+		rl.DrawTexturePro(crystalStoneSprite, src, dest, rl.Vector2{}, 0, rl.White)
+	}
 }
 
 func input() {
@@ -190,6 +214,14 @@ func input() {
 	if rl.IsKeyPressed(rl.KeyV) {
 		fmt.Println("V key pressed!")
 		pickUpPineCone()
+	}
+
+	if rl.IsKeyPressed(rl.KeyB) { // Use B key to drop crystal stone
+		dropCrystalStone()
+	}
+
+	if rl.IsKeyPressed(rl.KeyN) { // Use N key to pick up crystal stone
+		pickUpCrystalStone()
 	}
 }
 
@@ -341,6 +373,13 @@ func init() {
 
 	// Set initial inventory
 	updateInventory()
+
+	crystalStoneSprite = rl.LoadTexture("res/Objects/crystal_stone.png")
+	crystalStoneCount = 5 // Start with 5 crystal stones in inventory
+	droppedCrystalStones = make([]rl.Vector2, 0)
+
+	// Update inventory to show initial crystal stones
+	updateInventory()
 }
 
 func quit() {
@@ -354,6 +393,7 @@ func quit() {
 	rl.UnloadTexture(pineTreeSprite)
 	rl.UnloadTexture(bagBgSprite)
 	rl.UnloadTexture(pineConeIconSprite)
+	rl.UnloadTexture(crystalStoneSprite)
 }
 
 func updateInventory() {
@@ -369,12 +409,11 @@ func updateInventory() {
 		inventory[0].Count = pineConeCount
 	}
 
-	// Add other items to other slots as needed
-	// For example:
-	// if waterCount > 0 {
-	//     inventory[1].Item = ItemWater
-	//     inventory[1].Count = waterCount
-	// }
+	// Add crystal stones to second slot
+	if crystalStoneCount > 0 {
+		inventory[1].Item = ItemCrystalStone
+		inventory[1].Count = crystalStoneCount
+	}
 }
 
 func dropPineCone() {
@@ -477,9 +516,14 @@ func drawDebug() {
 	}
 	rl.DrawCircle(int32(playerCenter.X), int32(playerCenter.Y), 3, rl.Red)
 
-	// Draw interaction radius around pine cones (increased to 150)
+	// Draw interaction radius around pine cones
 	for _, cone := range droppedPineCones {
 		rl.DrawCircleLines(int32(cone.X), int32(cone.Y), 150, rl.Green)
+	}
+
+	// Draw interaction radius around crystal stones
+	for _, stone := range droppedCrystalStones {
+		rl.DrawCircleLines(int32(stone.X), int32(stone.Y), 150, rl.Purple)
 	}
 }
 
@@ -512,6 +556,74 @@ func pickUpPineCone() {
 		}
 	}
 	fmt.Println("No pine cone in range to pick up")
+}
+
+func dropCrystalStone() {
+	if crystalStoneCount <= 0 {
+		fmt.Println("No crystal stones to drop!")
+		return
+	}
+
+	playerCenter := rl.Vector2{
+		X: playerDest.X + playerDest.Width/2,
+		Y: playerDest.Y + playerDest.Height/2,
+	}
+
+	var offsetX, offsetY float32
+	switch playerDir {
+	case 0: // Down
+		offsetX = 0
+		offsetY = playerDest.Height/2 + 30
+	case 1: // Up
+		offsetX = 0
+		offsetY = -playerDest.Height/2 - 30
+	case 2: // Left
+		offsetX = -playerDest.Width/2 - 30
+		offsetY = 0
+	case 3: // Right
+		offsetX = playerDest.Width/2 + 30
+		offsetY = 0
+	}
+
+	crystalStonePos := rl.Vector2{
+		X: playerCenter.X + offsetX,
+		Y: playerCenter.Y + offsetY,
+	}
+
+	droppedCrystalStones = append(droppedCrystalStones, crystalStonePos)
+	crystalStoneCount--
+
+	updateInventory()
+	fmt.Printf("Dropped crystal stone at: %v (facing direction: %d)\n", crystalStonePos, playerDir)
+}
+
+func pickUpCrystalStone() {
+	playerCenter := rl.Vector2{
+		X: playerDest.X + playerDest.Width/2,
+		Y: playerDest.Y + playerDest.Height/2,
+	}
+
+	// Log the player position for debugging
+	fmt.Printf("Player center position: %v\n", playerCenter)
+
+	for i, stone := range droppedCrystalStones {
+		// Log each stone position
+		fmt.Printf("Checking crystal stone at position: %v\n", stone)
+
+		// Calculate distance between player and crystal stone
+		distance := float32(math.Hypot(float64(playerCenter.X-stone.X), float64(playerCenter.Y-stone.Y)))
+		fmt.Printf("Distance to crystal stone: %f\n", distance)
+
+		// Increased pickup radius to match the interaction radius (150 pixels)
+		if distance < 150 {
+			fmt.Println("Crystal stone picked up!")
+			droppedCrystalStones = append(droppedCrystalStones[:i], droppedCrystalStones[i+1:]...)
+			crystalStoneCount++
+			updateInventory()
+			return // Added return to prevent checking other stones after picking one up
+		}
+	}
+	fmt.Println("No crystal stone in range to pick up")
 }
 
 func main() {
