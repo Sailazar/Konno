@@ -16,6 +16,7 @@ A 2D game built with Go and Raylib, inspired by Totoro and featuring tree-growin
 - V: Pick up pine cone
 - B: Drop crystal stone
 - N: Pick up crystal stone
+- P: Create water splash effect
 
 ## Requirements
 - Go

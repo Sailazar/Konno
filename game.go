@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -55,6 +57,9 @@ var (
 	crystalStoneSprite   rl.Texture2D
 	crystalStoneCount    int
 	droppedCrystalStones []rl.Vector2
+
+	particles    []Particle
+	splashActive bool
 )
 
 type ItemType int
@@ -71,6 +76,15 @@ type InventorySlot struct {
 }
 
 var inventory [4]InventorySlot
+
+type Particle struct {
+	position rl.Vector2
+	velocity rl.Vector2
+	color    rl.Color
+	size     float32
+	life     float32
+	maxLife  float32
+}
 
 func drawScene() {
 	// Calculate the visible area based on camera position
@@ -160,6 +174,9 @@ func drawScene() {
 		// Draw the crystal stone with scaling
 		rl.DrawTexturePro(crystalStoneSprite, src, dest, rl.Vector2{}, 0, rl.White)
 	}
+
+	// Draw particles
+	drawParticles()
 }
 
 func input() {
@@ -223,6 +240,15 @@ func input() {
 	if rl.IsKeyPressed(rl.KeyN) { // Use N key to pick up crystal stone
 		pickUpCrystalStone()
 	}
+
+	if rl.IsKeyPressed(rl.KeyP) { // Use P key to trigger splash
+		// Create splash at player position
+		playerCenter := rl.Vector2{
+			X: playerDest.X + playerDest.Width/2,
+			Y: playerDest.Y + playerDest.Height/2,
+		}
+		createSplashEffect(playerCenter.X, playerCenter.Y)
+	}
 }
 
 func update() {
@@ -266,6 +292,7 @@ func update() {
 	camera.Target.Y = camera.Target.Y + (playerDest.Y+playerDest.Height/2-camera.Target.Y)*smoothness
 
 	updateTrees()
+	updateParticles()
 }
 
 func render() {
@@ -380,6 +407,9 @@ func init() {
 
 	// Update inventory to show initial crystal stones
 	updateInventory()
+
+	particles = make([]Particle, 0)
+	rand.Seed(time.Now().UnixNano()) // Initialize random seed
 }
 
 func quit() {
@@ -624,6 +654,64 @@ func pickUpCrystalStone() {
 		}
 	}
 	fmt.Println("No crystal stone in range to pick up")
+}
+
+func createSplashEffect(x, y float32) {
+	numParticles := 20 // Number of particles in the splash
+	for i := 0; i < numParticles; i++ {
+		// Random angle for particle direction
+		angle := float32(rand.Float64() * math.Pi * 2)
+		// Random speed between 2 and 5
+		speed := float32(2 + rand.Float64()*3)
+
+		particle := Particle{
+			position: rl.Vector2{X: x, Y: y},
+			velocity: rl.Vector2{
+				X: float32(math.Cos(float64(angle))) * speed,
+				Y: float32(math.Sin(float64(angle))) * speed,
+			},
+			color:   rl.NewColor(100, 200, 255, 255), // Light blue color
+			size:    float32(2 + rand.Float64()*3),   // Random size between 2 and 5
+			life:    1.0,                             // Full life
+			maxLife: 1.0,                             // Maximum life
+		}
+		particles = append(particles, particle)
+	}
+}
+
+func updateParticles() {
+	for i := len(particles) - 1; i >= 0; i-- {
+		// Update position
+		particles[i].position.X += particles[i].velocity.X
+		particles[i].position.Y += particles[i].velocity.Y
+
+		// Apply gravity
+		particles[i].velocity.Y += 0.1
+
+		// Reduce life
+		particles[i].life -= 0.02
+
+		// Remove dead particles
+		if particles[i].life <= 0 {
+			particles = append(particles[:i], particles[i+1:]...)
+		}
+	}
+}
+
+func drawParticles() {
+	for _, p := range particles {
+		// Calculate alpha based on life
+		alpha := uint8(p.life * 255)
+		color := rl.NewColor(p.color.R, p.color.G, p.color.B, alpha)
+
+		// Draw particle as a circle
+		rl.DrawCircle(
+			int32(p.position.X),
+			int32(p.position.Y),
+			p.size, // Changed from int32(p.size) to just p.size (already float32)
+			color,
+		)
+	}
 }
 
 func main() {
