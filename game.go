@@ -60,6 +60,12 @@ var (
 
 	particles    []Particle
 	splashActive bool
+
+	cloudSprite rl.Texture2D
+
+	cloudsLayer1 []rl.Vector2 // Farthest, slowest
+	cloudsLayer2 []rl.Vector2 // Middle
+	cloudsLayer3 []rl.Vector2 // Closest, fastest
 )
 
 type ItemType int
@@ -177,6 +183,19 @@ func drawScene() {
 
 	// Draw particles
 	drawParticles()
+
+	// Draw clouds layer 1 (farthest)
+	for _, pos := range cloudsLayer1 {
+		rl.DrawTexture(cloudSprite, int32(pos.X), int32(pos.Y), rl.Fade(rl.White, 0.5)) // more transparent
+	}
+	// Draw clouds layer 2 (middle)
+	for _, pos := range cloudsLayer2 {
+		rl.DrawTexture(cloudSprite, int32(pos.X), int32(pos.Y), rl.Fade(rl.White, 0.7))
+	}
+	// Draw clouds layer 3 (closest)
+	for _, pos := range cloudsLayer3 {
+		rl.DrawTexture(cloudSprite, int32(pos.X), int32(pos.Y), rl.White)
+	}
 }
 
 func input() {
@@ -293,6 +312,7 @@ func update() {
 
 	updateTrees()
 	updateParticles()
+	updateClouds()
 }
 
 func render() {
@@ -410,6 +430,9 @@ func init() {
 
 	particles = make([]Particle, 0)
 	rand.Seed(time.Now().UnixNano()) // Initialize random seed
+
+	cloudSprite = rl.LoadTexture("res/Objects/cloud.png")
+	initClouds()
 }
 
 func quit() {
@@ -424,6 +447,7 @@ func quit() {
 	rl.UnloadTexture(bagBgSprite)
 	rl.UnloadTexture(pineConeIconSprite)
 	rl.UnloadTexture(crystalStoneSprite)
+	rl.UnloadTexture(cloudSprite)
 }
 
 func updateInventory() {
@@ -711,6 +735,51 @@ func drawParticles() {
 			p.size, // Changed from int32(p.size) to just p.size (already float32)
 			color,
 		)
+	}
+}
+
+func initClouds() {
+	// Layer 1: Farthest, fewest clouds, highest Y, slowest
+	cloudsLayer1 = []rl.Vector2{
+		{X: 100, Y: 80},
+		{X: 700, Y: 120},
+		{X: 1400, Y: 60},
+	}
+	// Layer 2: Middle
+	cloudsLayer2 = []rl.Vector2{
+		{X: 300, Y: 200},
+		{X: 900, Y: 180},
+		{X: 1600, Y: 220},
+	}
+	// Layer 3: Closest, lowest Y, fastest
+	cloudsLayer3 = []rl.Vector2{
+		{X: 50, Y: 320},
+		{X: 800, Y: 350},
+		{X: 1500, Y: 300},
+	}
+}
+
+func updateClouds() {
+	// Layer 1: slowest
+	for i := range cloudsLayer1 {
+		cloudsLayer1[i].X += 0.2
+		if cloudsLayer1[i].X > float32(screenWidth) {
+			cloudsLayer1[i].X = -float32(cloudSprite.Width)
+		}
+	}
+	// Layer 2: medium
+	for i := range cloudsLayer2 {
+		cloudsLayer2[i].X += 0.5
+		if cloudsLayer2[i].X > float32(screenWidth) {
+			cloudsLayer2[i].X = -float32(cloudSprite.Width)
+		}
+	}
+	// Layer 3: fastest
+	for i := range cloudsLayer3 {
+		cloudsLayer3[i].X += 1.0
+		if cloudsLayer3[i].X > float32(screenWidth) {
+			cloudsLayer3[i].X = -float32(cloudSprite.Width)
+		}
 	}
 }
 
